@@ -1,0 +1,210 @@
+================================================================
+  WPS 图片关联修复工具 — 使用说明与技术文档
+================================================================
+
+最后更新：2026-06-13
+
+一、功能概述
+----------------------------------------------------------------
+
+本工具用于彻底解决 WPS Office 反复抢占图片文件默认打开方式的
+问题。修复后，图片文件将默认使用 Honeyview 打开，并通过计划
+任务守护，防止 WPS 再次抢占。
+
+覆盖的图片格式（21种）：
+  .jpg .jpeg .jpe .jfif .png .gif .bmp .tiff .tif
+  .webp .ico .svg .tga .pcx .psd .avif .heic
+  .wdp .dds .hdr .exr
+
+
+二、文件清单
+----------------------------------------------------------------
+
+1. C:\wps-fix\fix-wps-image-assoc.ps1
+   → 实际工作脚本（纯英文路径，计划任务执行此文件）
+
+2. G:\U盘工具\修复关联功能\终极修复WPS图片关联.ps1
+   → 中文入口脚本（双击运行用，内部调用C盘脚本）
+
+3. G:\U盘工具\修复关联功能\使用说明.txt
+   → 本文件
+
+4. 日志文件：%TEMP%\wps-image-fix.log
+   → 每次运行自动生成，记录10步执行过程
+
+
+三、使用方法
+----------------------------------------------------------------
+
+【方法一】双击运行（推荐日常使用）
+  直接双击"终极修复WPS图片关联.ps1"
+  → 弹出UAC提示点"是"
+  → 等待约15秒完成
+  → 查看窗口显示的日志确认成功
+
+【方法二】计划任务自动运行
+  任务名：HoneyviewAssocGuard
+  触发器：每次用户登录后延迟2分钟自动执行
+  无需手动操作
+
+【首次部署步骤】（装机后需执行）
+  1. 安装 Honeyview 到 C:\Program Files\Honeyview\
+  2. 安装 WPS Office
+  3. 将 fix-wps-image-assoc.ps1 复制到 C:\wps-fix\
+  4. 将 终极修复WPS图片关联.ps1 复制到 G:\U盘工具\修复关联功能\
+  5. 右键"终极修复WPS图片关联.ps1"→ 使用 PowerShell 运行
+  6. 脚本会自动创建守护计划任务 HoneyviewAssocGuard
+  7. 重启电脑，确认守护任务自动执行（上次运行结果为 0x0）
+
+
+四、脚本执行的10个步骤
+----------------------------------------------------------------
+
+Step 1  管理员权限检查（必须以管理员身份运行）
+Step 2  查找 Honeyview.exe 路径
+Step 3  强制结束所有 WPS 进程
+Step 4  删除 WPS 计划任务 + 用只读目录阻止重建
+Step 5  删除 WPS 图片 ProgID（HKCU + HKLM 两层）
+Step 6  深度禁用 WPS 自检配置（9项注册表值）
+Step 7  清理 HKCU 覆盖 + FileExts（所有图片扩展名）
+Step 8  创建 Honeyview ProgIDs + 设置文件关联
+Step 9  刷新 Windows 缓存 + 重启资源管理器
+Step 10 更新守护计划任务
+
+
+五、WPS 抢占机制与对策
+----------------------------------------------------------------
+
+WPS 通过以下5种方式抢占图片关联：
+
+┌──────────────────────────┬───────────────────────────────────┐
+│ 抢占方式                 │ 对策                              │
+├──────────────────────────┼───────────────────────────────────┤
+│ 1. 启动时自检关联        │ 禁用 first_detect_file_...=false │
+│                          │ 启用 do_not_detect_file_...=true  │
+│                          │ 禁用 enableImageViewer=false      │
+├──────────────────────────┼───────────────────────────────────┤
+│ 2. 注册 WPS.PIC.* ProgID│ 删除 HKCU + HKLM 下的所有        │
+│                          │ WPS.PIC.* 条目                    │
+├──────────────────────────┼───────────────────────────────────┤
+│ 3. 计划任务定时检测      │ 删除任务 + 创建只读空目录        │
+│                          │ + DENY WRITE ACL 阻止重建         │
+├──────────────────────────┼───────────────────────────────────┤
+│ 4. 后台进程持续监控      │ 强制杀掉 wps/wpp/et 等9个进程    │
+├──────────────────────────┼───────────────────────────────────┤
+│ 5. 更新程序重置配置      │ 设置 UpdateMode=manual            │
+│                          │ + 守护任务登录时自动修复          │
+└──────────────────────────┴───────────────────────────────────┘
+
+深度禁用的 WPS 注册表配置项（HKCU\Software\Kingsoft\Office\6.0\Common）：
+
+  enableImageViewer                        = false
+  first_detect_file_association_while_startup = false
+  do_not_detect_file_association_while_startup = true
+  AssoImagePreview                         = false
+  OldAssoImagePreview                      = false
+  AssoProtectSwitch                        = 0
+  img_last_unasso_time                     = 当前日期
+  UpdateMode (updateinfo下)                = manual
+  compatible_type                          = 移除 Png;Jpg;Gif
+
+
+六、踩过的坑（关键教训）
+----------------------------------------------------------------
+
+【坑1】计划任务路径不能含中文
+  问题：Windows 计划任务 XML 用 UTF-16 编码存储 Arguments，
+        中文路径写入后被破坏成乱码，PowerShell 找不到脚本
+  现象：上次运行结果 0xF0FD0000
+  解决：脚本必须放在纯英文路径（C:\wps-fix\）
+
+【坑2】PowerShell 变量名 $pid 是只读常量
+  问题：$PID 是 PowerShell 内置变量（当前进程ID），不可覆盖
+  现象：脚本报错"无法覆盖变量 PID，因为该变量为只读变量"
+  解决：所有自定义变量避开 $pid，改用 $pgid 等名称
+
+【坑3】计划任务中不能有 Read-Host
+  问题：计划任务是非交互环境，Read-Host 会卡住导致超时
+  现象：上次运行结果 0x1，脚本一闪而过
+  解决：脚本支持 -Silent 参数，计划任务带此参数运行
+
+【坑4】G盘中文目录在非GBK环境下乱码
+  问题：G:\U盘工具\修复关联功能\ 中的"U盘工具"等中文
+        在计划任务调度的编码环境下变成"U鐩樺伐鍏穃"
+  现象：脚本中涉及当前目录的文件操作全部失败
+  解决：脚本不依赖 $MyInvocation.MyCommand.Path 的目录部分，
+        所有路径硬编码为英文路径 C:\wps-fix\
+
+【坑5】bat 文件中文乱码
+  问题：UTF-8 编码的 .bat 文件在 GBK(cmd 936) 下中文变乱码
+  解决：完全放弃 bat，改用 PowerShell 脚本
+
+【坑6】注册表默认值不能用 New-ItemProperty 设置
+  问题：New-ItemProperty -Name "(Default)" 实际创建的是
+        名为 "(Default)" 的值，不是真正的默认值
+  解决：使用 .NET API：
+        [Microsoft.Win32.Registry]::CurrentUser
+          .CreateSubKey("Software\Classes\.jpg")
+          .SetValue("", "Honeyview.jpg")
+
+
+七、守护任务 HoneyviewAssocGuard 配置
+----------------------------------------------------------------
+
+  任务名：HoneyviewAssocGuard
+  执行程序：powershell.exe
+  参数：-NoProfile -ExecutionPolicy Bypass
+        -File "C:\wps-fix\fix-wps-image-assoc.ps1" -Silent
+  触发器：用户登录时，延迟 PT2M（2分钟）
+  运行级别：最高权限（RunLevel=Highest）
+  电池设置：允许电池供电时运行
+  错过时补执行：是（StartWhenAvailable=true）
+
+验证方法：
+  1. 打开"任务计划程序"（taskschd.msc）
+  2. 找到 HoneyviewAssocGuard
+  3. 查看"上次运行结果"，0x0 表示成功
+  4. 查看日志：%TEMP%\wps-image-fix.log
+
+
+八、排错指南
+----------------------------------------------------------------
+
+Q: 双击 .ps1 文件没反应？
+A: 右键 → "使用 PowerShell 运行"，或以管理员身份打开
+   PowerShell 执行：
+   Set-ExecutionPolicy Bypass -Scope CurrentUser
+   然后再双击运行
+
+Q: 守护任务上次运行结果不是 0x0？
+A: 1. 检查 C:\wps-fix\fix-wps-image-assoc.ps1 是否存在
+   2. 查看 %TEMP%\wps-image-fix.log 日志内容
+   3. 确认任务参数中路径为纯英文（不含中文）
+
+Q: WPS 又抢回了图片关联？
+A: 1. 手动运行一次"终极修复WPS图片关联.ps1"
+   2. 检查守护任务是否正常（参考第七节验证方法）
+   3. 检查 WPS 计划任务是否被重建
+      （如果被重建，说明只读目录阻止失败，
+       需重新执行脚本 Step 4）
+
+Q: 如何完全卸载本工具？
+A: 1. 打开任务计划程序，删除 HoneyviewAssocGuard
+   2. 删除 C:\wps-fix\ 文件夹
+   3. 删除 G:\U盘工具\修复关联功能\ 中的脚本文件
+
+
+九、参考资料
+----------------------------------------------------------------
+
+- WPS 抢占关联原理参考：
+  https://www.yeyulingfeng.com/426674.html
+
+- Windows 文件关联注册表层级：
+  UserChoice > HKCU\Software\Classes > HKLM\SOFTWARE\Classes
+
+- Windows UserChoice Hash 保护机制：
+  UserChoice 键有 Hash 值保护，普通 reg 文件无法直接修改，
+  需使用 .NET Registry API 或先删除再创建
+
+================================================================

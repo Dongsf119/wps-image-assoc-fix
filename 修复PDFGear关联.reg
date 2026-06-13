@@ -1,0 +1,29 @@
+Windows Registry Editor Version 5.00
+
+; =============================================
+; 将PDF默认程序设为 PDFGear
+; 解决腾讯电脑管家PDF浏览器列表不显示PDFGear的问题
+; 用法：双击运行，确认导入，重启资源管理器后生效
+; =============================================
+
+; --- 清除PC管家可能设置的UserChoice锁定 ---
+[-HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.pdf\UserChoice]
+
+; --- 设置PDF扩展名指向PDFGear ProgID ---
+[HKEY_CLASSES_ROOT\.pdf]
+@="PdfGear.App.1"
+
+; --- 确保PdfGear ProgID完整注册 ---
+[HKEY_CLASSES_ROOT\PdfGear.App.1]
+@="PDFGear PDF File"
+[HKEY_CLASSES_ROOT\PdfGear.App.1\DefaultIcon]
+@="d:\\Program Files\\PDFgear\\PDFLauncher.exe,0"
+[HKEY_CLASSES_ROOT\PdfGear.App.1\shell]
+@="open"
+[HKEY_CLASSES_ROOT\PdfGear.App.1\shell\open]
+[HKEY_CLASSES_ROOT\PdfGear.App.1\shell\open\command]
+@="\"d:\\Program Files\\PDFgear\\PDFLauncher.exe\" \"%1\""
+
+; --- 添加PDFGear到打开方式列表 ---
+[HKEY_CLASSES_ROOT\.pdf\OpenWithList\PDFLauncher.exe]
+[HKEY_CLASSES_ROOT\.pdf\OpenWithList\Honeyview.exe]
